@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Receiver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 32px;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .status.listening {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status.offline {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .notification-area {
+            min-height: 200px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .notification-area.has-notification {
+            background: linear-gradient(135deg, #fff5cd 0%, #ffe9b8 100%);
+            border: 3px solid #ffc107;
+            animation: pulse 1s ease-in-out;
+        }
+
+        .time-display {
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .time-up-header {
+            font-size: 36px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 20px;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+            }
+        }
+
+        .no-notification {
+            color: #6c757d;
+            font-size: 18px;
+        }
+
+        .notification-message {
+            font-size: 20px;
+            color: #333;
+            font-weight: 500;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+
+        .notification-time {
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .click-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 40px 60px;
+            border-radius: 16px;
+            z-index: 1000;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s ease-in-out;
+            cursor: pointer;
+        }
+
+        .click-prompt:hover {
+            background: rgba(0, 0, 0, 0.95);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .check-interval {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Notification Receiver</h1>
+        <div id="status" class="status listening">
+            Listening for notifications...
+        </div>
+
+        <div class="time-display" id="currentTime"></div>
+
+        <div id="notificationArea" class="notification-area">
+            <div class="icon">🔔</div>
+            <div class="no-notification">Waiting for notifications...</div>
+        </div>
+
+        <div class="check-interval">Checking every 2 seconds</div>
+    </div>
+
+    <div id="clickPrompt" class="click-prompt">
+        🔊 Click anywhere to enable sound notifications 🔊
+    </div>
+
+    <audio id="notificationSound" preload="auto">
+        <source src="http://localhost:5000/static/notification.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const notificationArea = document.getElementById('notificationArea');
+        const statusDiv = document.getElementById('status');
+        const audio = document.getElementById('notificationSound');
+        const currentTimeDiv = document.getElementById('currentTime');
+        const clickPrompt = document.getElementById('clickPrompt');
+
+        let lastCheck = null;
+        let isPlaying = false;
+
+        // Update time every second
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            currentTimeDiv.textContent = `${hours}:${minutes}:${seconds}`;
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // Enable audio playback even when tab is not focused
+        // This requires user interaction first
+        document.addEventListener('click', () => {
+            audio.play().then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+                clickPrompt.style.display = 'none';
+            }).catch(e => console.log('Audio setup:', e));
+        }, { once: true });
+
+        async function checkForNotifications() {
+            try {
+                const url = lastCheck
+                    ? `http://localhost:5000/api/check?last_check=${encodeURIComponent(lastCheck)}`
+                    : 'http://localhost:5000/api/check';
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusDiv.textContent = 'Listening for notifications...';
+                    statusDiv.className = 'status listening';
+
+                    if (data.has_notification) {
+                        displayNotification(data.message, data.timestamp);
+                        lastCheck = data.timestamp;
+
+                        // Play sound 3 times
+                        if (!isPlaying) {
+                            playSound(3);
+                        }
+                    }
+                } else {
+                    throw new Error('Failed to check notifications');
+                }
+            } catch (error) {
+                console.error('Error checking notifications:', error);
+                statusDiv.textContent = 'Connection error - retrying...';
+                statusDiv.className = 'status offline';
+            }
+        }
+
+        function displayNotification(message, timestamp) {
+            const time = new Date(timestamp).toLocaleString();
+
+            notificationArea.className = 'notification-area has-notification';
+            notificationArea.innerHTML = `
+                <div class="time-up-header">⏰ Time is up! ⏰</div>
+                <div class="icon">🔔</div>
+                <div class="notification-message">${escapeHtml(message)}</div>
+                <div class="notification-time">Received at ${time}</div>
+            `;
+        }
+
+        async function playSound(times) {
+            isPlaying = true;
+
+            for (let i = 0; i < times; i++) {
+                try {
+                    audio.currentTime = 0;
+                    await audio.play();
+                    // Wait for audio to finish playing
+                    await new Promise(resolve => {
+                        audio.onended = resolve;
+                    });
+                } catch (error) {
+                    console.error('Error playing sound:', error);
+                    break;
+                }
+            }
+
+            isPlaying = false;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Check for notifications every 2 seconds
+        setInterval(checkForNotifications, 2000);
+
+        // Initial check
+        checkForNotifications();
+    </script>
+</body>
+</html>
